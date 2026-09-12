@@ -1,74 +1,116 @@
 # Enterprise IT Support Homelab
 
-A practical Windows IT support lab built in Hyper-V to simulate a small business environment and develop hands-on first-line IT support, Windows administration and networking skills.
+A practical Windows IT support homelab built in Hyper-V to simulate a small business environment and develop hands-on Windows administration, Active Directory, networking and troubleshooting skills.
 
 ## Technologies
 
 - Hyper-V
 - Windows Server 2025
 - Windows 11 Pro
-- Active Directory Domain Services (AD DS)
+- Active Directory Domain Services
 - DNS
+- SMB file sharing
+- NTFS permissions
 - PowerShell
 - TCP/IP networking
+
+---
 
 ## Lab Environment
 
 | Device | Role | IP Address |
 |---|---|---|
 | DC01 | Domain Controller / DNS Server | 10.10.10.10 |
-| CLIENT01 | Windows 11 workstation | To be configured |
+| CLIENT01 | Domain-joined Windows 11 workstation | 10.10.10.x |
 | Hyper-V Host | Lab gateway / NAT | 10.10.10.1 |
 
-**Domain:** `corp.example.com`  
-**Lab network:** `10.10.10.0/24`
+**Domain:** `corp.example.com`
 
-## Active Directory Structure
+**Network:** `10.10.10.0/24`
 
-Departments:
+---
+
+# Active Directory
+
+I created a fictional company structure in Active Directory with separate organisational units for:
 
 - IT
 - Finance
-- Sales
 - HR
+- Sales
+- Computers
+- Groups
 
-Security groups:
+Departmental Global Security Groups were also created:
 
-- GG-IT
-- GG-Finance
-- GG-Sales
-- GG-HR
+- `GG-IT`
+- `GG-Finance`
+- `GG-HR`
+- `GG-Sales`
 
-Test users have been created and assigned to their relevant departmental security groups.
+Users were placed into their relevant department groups so access can be managed through groups rather than assigning permissions directly to individual users.
 
-## Current Progress
 
-- [x] Created Hyper-V lab network
-- [x] Installed Windows Server 2025
-- [x] Installed Active Directory Domain Services
-- [x] Created `corp.example.com`
-- [x] Created organisational units
-- [x] Created users and security groups
-- [x] Installed Windows 11 Pro CLIENT01
-- [ ] Configure CLIENT01 networking
-- [ ] Join CLIENT01 to the domain
-- [ ] Configure file shares and permissions
-- [ ] Configure Group Policy
-- [ ] Configure DHCP
-- [ ] Create troubleshooting scenarios
-- [ ] Document first-line support tickets
+## Active Directory Structure
 
-## Project Goals
+📸 **SCREENSHOT 1 GOES HERE**
 
-This lab will be used to practise:
+**Use:** the screenshot showing the `Company` OU expanded with:
 
-- Active Directory user and group administration
-- Windows domain joining
-- Password resets and account lockouts
-- New starter and leaver processes
-- NTFS and shared-folder permissions
-- Group Policy
-- DNS and DHCP troubleshooting
-- Basic TCP/IP troubleshooting
-- PowerShell administration
-- Realistic first-line IT support scenarios
+- Computers
+- Finance
+- Groups
+- HR
+- IT
+- Sales
+
+and the `GG-Finance`, `GG-HR`, `GG-IT`, `GG-Sales` groups visible.
+
+**Do not use four separate screenshots for each department.**
+
+
+<!-- Screenshot 1: Active Directory OU and group structure -->
+
+
+
+## Security Group Membership
+
+Users were assigned to departmental Global Security Groups.
+
+For example, IT users were added to:
+
+`GG-IT`
+
+This makes administration easier because access is assigned to the group instead of directly to individual user accounts.
+
+
+📸 **SCREENSHOT 2 GOES HERE**
+
+**Use:** your screenshot showing:
+
+`GG-IT Properties → Members`
+
+with:
+
+- Alex Morgan
+- Sam Wilson
+
+visible as members.
+
+
+<!-- Screenshot 2: GG-IT group membership -->
+
+
+
+---
+
+# Departmental File Shares
+
+I created departmental folders on DC01:
+
+```text
+C:\Company Shares\
+├── Finance
+├── HR
+├── IT
+└── Sales
