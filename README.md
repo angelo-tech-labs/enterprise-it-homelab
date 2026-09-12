@@ -1,34 +1,54 @@
 # Enterprise IT Support Homelab
 
-A practical Windows enterprise homelab built in Hyper-V to develop hands-on experience with Active Directory, Windows Server, networking, permissions and IT troubleshooting.
+A practical Windows enterprise homelab built in Hyper-V to develop hands-on experience with Windows Server, Active Directory, DNS, domain administration, file permissions and troubleshooting.
+
+The environment simulates a small business with separate IT, Finance, HR and Sales departments.
+
+---
 
 ## Lab Environment
 
-| Device | Role | IP |
+| Device | Role | IP Address |
 |---|---|---|
-| DC01 | Windows Server 2025 / Domain Controller / DNS | 10.10.10.10 |
-| CLIENT01 | Windows 11 domain workstation | 10.10.10.x |
 | Hyper-V Host | Lab gateway / NAT | 10.10.10.1 |
+| DC01 | Windows Server 2025 / Domain Controller / DNS | 10.10.10.10 |
+| CLIENT01 | Windows 11 domain workstation | 10.10.10.20 |
 
 **Domain:** `corp.example.com`  
 **Network:** `10.10.10.0/24`
 
+The lab uses an internal Hyper-V network with NAT through the Windows host.
+
 ---
 
-## What I Built
+## DC01 Network Configuration
 
-- Windows Server 2025 Domain Controller
-- Active Directory Domain Services
-- DNS
-- Windows 11 domain-joined workstation
-- Organisational Units for IT, Finance, HR and Sales
-- Test user accounts
-- Departmental security groups
-- SMB network file shares
-- NTFS and Share permissions
-- Group-based access control
+DC01 was configured with a static IP address and acts as the DNS server for the Active Directory domain.
 
-Department groups:
+CLIENT01 uses DC01 for DNS so it can locate domain services and authenticate against `corp.example.com`.
+
+![DC01 Network Configuration](screenshots/01-dc01-network.png)
+
+---
+
+## Active Directory
+
+I installed Active Directory Domain Services and created the domain:
+
+```text
+corp.example.com
+```
+
+I then created a small fictional company structure using Organisational Units for:
+
+- IT
+- Finance
+- HR
+- Sales
+- Computers
+- Groups
+
+Departmental Global Security Groups were created:
 
 ```text
 GG-IT
@@ -37,150 +57,265 @@ GG-HR
 GG-Sales
 ```
 
-Users are assigned access through security groups rather than permissions being applied directly to individual accounts.
+Users were created inside their relevant departmental OUs and added to the corresponding security groups.
+
+Permissions are assigned to groups rather than directly to individual user accounts.
+
+![Active Directory Structure](screenshots/02-ad-structure.png)
 
 ---
 
-## Active Directory
+## Windows 11 Domain Client
 
-I created a small fictional company structure with separate OUs for users, computers and departmental groups.
+CLIENT01 was configured as a Windows 11 workstation on the lab network.
 
-### AD Structure
-
-<!-- PUT SCREENSHOT HERE:
-Screenshot showing Company expanded with:
-Computers, Finance, Groups, HR, IT, Sales
-and GG-Finance, GG-HR, GG-IT, GG-Sales
--->
-
-![Active Directory Structure](screenshots/ad-structure.png)
-
-### Group Membership
-
-Example IT users were added to the `GG-IT` security group.
-
-<!-- PUT SCREENSHOT HERE:
-GG-IT Properties → Members
-showing Alex Morgan and Sam Wilson
--->
-
-![GG-IT Membership](screenshots/gg-it-members.png)
-
----
-
-## Department File Shares
-
-I created departmental network shares on DC01:
+It was configured to use DC01 for DNS and successfully joined to:
 
 ```text
-Finance
-HR
-IT
-Sales
+corp.example.com
 ```
 
-Access is controlled using the corresponding Active Directory security group.
+Domain users can then sign into CLIENT01 using their Active Directory accounts.
 
-| Share | Group |
+This allows the client workstation to receive domain authentication, permissions and future Group Policy settings from the server.
+
+---
+
+## Departmental File Shares
+
+I created departmental folders on DC01:
+
+```text
+C:\Company Shares\
+├── Finance
+├── HR
+├── IT
+└── Sales
+```
+
+Each folder was published as an SMB network share.
+
+| Network Share | Active Directory Group |
 |---|---|
 | Finance | GG-Finance |
 | HR | GG-HR |
 | IT | GG-IT |
 | Sales | GG-Sales |
 
-Department users receive **Modify** access, allowing them to create, edit and delete files without being able to change folder security permissions.
+For example:
+
+```text
+\\DC01\Finance
+```
+
+or by IP:
+
+```text
+\\10.10.10.10\Finance
+```
+
+---
+
+## Share and NTFS Permissions
+
+I configured two permission layers for each departmental share.
+
+### Share Permissions
+
+The relevant departmental group receives:
+
+```text
+Change
+Read
+```
+
+Standard users are not given Full Control.
 
 ### NTFS Permissions
 
-<!-- PUT SCREENSHOT HERE:
-One Security tab screenshot showing:
-SYSTEM
-Administrators
-GG-Finance
-with GG-Finance = Modify
--->
+The corresponding security group receives:
 
-![NTFS Permissions](screenshots/finance-ntfs-permissions.png)
+```text
+Modify
+Read & execute
+List folder contents
+Read
+Write
+```
+
+`SYSTEM` and `Administrators` retain Full Control.
+
+Generic domain user access was removed so users must belong to the correct departmental group to access the folder.
+
+This means a user can create, edit, rename and delete departmental files without being able to change folder security permissions.
 
 ---
 
 ## Access Control Testing
 
-I tested the permissions from CLIENT01.
+I tested the permissions from CLIENT01 using different domain users.
 
-A Finance user was able to access the Finance share and create, edit and delete files.
+### Authorised User
 
-<!-- PUT SCREENSHOT HERE:
-Finance network share open on CLIENT01
-with Finance-Test.txt visible
--->
+A Finance user successfully accessed:
 
-![Finance Share Access](screenshots/finance-share-success.png)
+```text
+\\10.10.10.10\Finance
+```
 
-I then tested the same Finance share while logged in as **Alex Morgan**, a member of `GG-IT`.
+The user was able to:
 
-Windows correctly denied access because the user was not a member of `GG-Finance`.
+- open the share
+- create a file
+- edit and save it
+- rename it
+- delete it
 
-<!-- PUT SCREENSHOT HERE:
-"You do not have permission to access..."
-for the Finance share
--->
+![Authorised Finance Access](screenshots/03-finance-share-success.png)
 
-![Access Denied](screenshots/finance-access-denied.png)
+### Unauthorised User
 
-This confirmed that departmental access control was working correctly.
+I then tested the same Finance share while logged in as an IT user.
+
+The IT user belongs to:
+
+```text
+GG-IT
+```
+
+but not:
+
+```text
+GG-Finance
+```
+
+Windows correctly denied access to the Finance share.
+
+![Unauthorised Access Denied](screenshots/04-finance-access-denied.png)
+
+This confirmed that access was being controlled through Active Directory group membership.
+
+The permission model is effectively:
+
+```text
+User
+  ↓
+Active Directory Security Group
+  ↓
+Share + NTFS Permissions
+  ↓
+Department Network Share
+```
+
+For example:
+
+```text
+Alex Morgan
+     ↓
+GG-IT
+     ↓
+IT Share
+```
+
+If a user changes department, access can be changed by updating their security group membership instead of manually assigning folder permissions to that individual user.
 
 ---
 
-## Troubleshooting
+## Networking and Troubleshooting
 
-During file-share testing I used basic network and service troubleshooting.
+I also used the lab to practise troubleshooting connectivity between CLIENT01 and DC01.
+
+Basic IP connectivity was tested with:
 
 ```powershell
 ping 10.10.10.10
 ```
 
-Confirmed IP connectivity between CLIENT01 and DC01.
+This confirmed that CLIENT01 could reach DC01.
+
+Because Windows file sharing uses SMB over TCP port 445, I also tested the service directly:
 
 ```powershell
 Test-NetConnection 10.10.10.10 -Port 445
 ```
 
-Confirmed connectivity to the SMB file-sharing service on TCP port 445.
+This confirmed connectivity to the SMB service.
 
-This demonstrated the difference between a device being reachable at the network layer and a specific service being reachable.
+This demonstrated an important troubleshooting difference:
+
+```text
+Ping succeeds
+     ↓
+The device is reachable
+
+TCP 445 succeeds
+     ↓
+The SMB service is reachable
+```
+
+A host can respond to ping while a specific service or port is still unavailable.
 
 ---
 
 ## Skills Demonstrated
 
+- Hyper-V
 - Windows Server 2025
-- Active Directory
+- Active Directory Domain Services
 - DNS
 - Windows domain administration
-- Users and security groups
-- SMB file sharing
+- Windows 11 domain joining
+- Organisational Units
+- User account administration
+- Active Directory security groups
+- Group-based access control
+- SMB network shares
+- Share permissions
 - NTFS permissions
-- Role-based access control
-- Windows 11 client administration
 - TCP/IP troubleshooting
-- PowerShell
+- PowerShell network testing
 
 ---
 
-## Progress
+## Current Progress
 
-- [x] Hyper-V lab network
+- [x] Hyper-V internal lab network
+- [x] NAT gateway
 - [x] Windows Server 2025
-- [x] Active Directory and DNS
-- [x] Users, OUs and security groups
-- [x] Windows 11 domain client
-- [x] SMB departmental file shares
-- [x] NTFS and Share permissions
-- [x] Authorised / unauthorised access testing
+- [x] DC01 static networking
+- [x] Active Directory Domain Services
+- [x] DNS
+- [x] `corp.example.com` domain
+- [x] Organisational Units
+- [x] Test users
+- [x] Departmental security groups
+- [x] User group membership
+- [x] Windows 11 CLIENT01
+- [x] CLIENT01 domain join
+- [x] Departmental SMB shares
+- [x] Share permissions
+- [x] NTFS permissions
+- [x] Authorised access testing
+- [x] Unauthorised access testing
+- [x] SMB / TCP 445 troubleshooting
 - [ ] Group Policy
-- [ ] Mapped drives
+- [ ] Mapped network drives
 - [ ] DHCP
-- [ ] PowerShell administration
+- [ ] PowerShell administration tasks
 - [ ] Wireshark packet analysis
 - [ ] IT support troubleshooting scenarios
+
+---
+
+## Next Steps
+
+Next I will expand the environment with:
+
+- Group Policy
+- mapped network drives
+- DHCP
+- password resets and account lockouts
+- new starter and leaver scenarios
+- PowerShell administration
+- Wireshark analysis
+- realistic IT support tickets
