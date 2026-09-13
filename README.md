@@ -149,7 +149,8 @@ I then logged in with an IT user and tried to access the same Finance share.
 
 Windows correctly denied access because the IT user was not a member of `GG-Finance`.
 
-![Finance Access Denied](screenshots/04-finance-access-denied.png)
+![Finance Access Denied]<img width="849" height="635" alt="Screenshot 2026-09-12 111459" src="https://github.com/user-attachments/assets/b99a6d93-61ad-4ed6-87bb-6e57b03c810c" />
+
 
 That confirmed that access was actually being controlled by Active Directory group membership.
 
