@@ -142,7 +142,8 @@ I tested everything from CLIENT01 rather than assuming the permissions were corr
 
 A Finance user could open the Finance share and create, edit and delete files.
 
-![Finance Share Access](screenshots/03-finance-share-success.png)
+![Finance Share Access]<img width="822" height="607" alt="Screenshot 2026-09-12 112143" src="https://github.com/user-attachments/assets/78728055-0635-4f91-8ec4-1a5762503d62" />
+
 
 I then logged in with an IT user and tried to access the same Finance share.
 
