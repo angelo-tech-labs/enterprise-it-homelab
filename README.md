@@ -61,7 +61,8 @@ Users are added to the group for their department instead of giving permissions 
 
 That means access can be managed through group membership, which is much easier to maintain.
 
-![Active Directory Structure](screenshots/02-ad-structure.png)
+![Active Directory Structure]<img width="840" height="763" alt="Screenshot 2026-09-11 195248" src="https://github.com/user-attachments/assets/d57e91a4-b670-4fa0-86aa-a22ab384731d" />
+
 
 ---
 
