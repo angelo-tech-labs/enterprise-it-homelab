@@ -27,7 +27,7 @@ I gave DC01 a static IP so the domain controller and DNS server always stay at t
 
 CLIENT01 uses DC01 as its DNS server. This is important because the client needs to find the Active Directory domain and its services through DNS.
 
-![DC01 Network Configuration](https://github.com/user-attachments/assets/592c591c-c309-4cb7-8960-dbba763fb1d2)
+(https://github.com/user-attachments/assets/592c591c-c309-4cb7-8960-dbba763fb1d2)
 
 ---
 
@@ -61,7 +61,7 @@ Users are added to the group for their department instead of giving permissions 
 
 That means access can be managed through group membership, which is much easier to maintain.
 
-![Active Directory Structure]<img width="840" height="763" alt="Screenshot 2026-09-11 195248" src="https://github.com/user-attachments/assets/d57e91a4-b670-4fa0-86aa-a22ab384731d" />
+<img width="840" height="763" alt="Screenshot 2026-09-11 195248" src="https://github.com/user-attachments/assets/d57e91a4-b670-4fa0-86aa-a22ab384731d" />
 
 
 ---
@@ -142,14 +142,14 @@ I tested everything from CLIENT01 rather than assuming the permissions were corr
 
 A Finance user could open the Finance share and create, edit and delete files.
 
-![Finance Share Access]<img width="822" height="607" alt="Screenshot 2026-09-12 112143" src="https://github.com/user-attachments/assets/78728055-0635-4f91-8ec4-1a5762503d62" />
+<img width="822" height="607" alt="Screenshot 2026-09-12 112143" src="https://github.com/user-attachments/assets/78728055-0635-4f91-8ec4-1a5762503d62" />
 
 
 I then logged in with an IT user and tried to access the same Finance share.
 
 Windows correctly denied access because the IT user was not a member of `GG-Finance`.
 
-![Finance Access Denied]<img width="849" height="635" alt="Screenshot 2026-09-12 111459" src="https://github.com/user-attachments/assets/b99a6d93-61ad-4ed6-87bb-6e57b03c810c" />
+<img width="849" height="635" alt="Screenshot 2026-09-12 111459" src="https://github.com/user-attachments/assets/b99a6d93-61ad-4ed6-87bb-6e57b03c810c" />
 
 
 That confirmed that access was actually being controlled by Active Directory group membership.
