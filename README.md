@@ -1,3 +1,4 @@
+<img width="951" height="620" alt="01-dc01-network png" src="https://github.com/user-attachments/assets/a6e500dc-19de-4e65-b025-6c7c4ee7a869" />
 # Enterprise IT Support Homelab
 
 I built this lab in Hyper-V to get practical experience with Windows Server, Active Directory, DNS, domain-joined clients, file sharing and troubleshooting.
