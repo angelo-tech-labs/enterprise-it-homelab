@@ -27,7 +27,7 @@ I gave DC01 a static IP so the domain controller and DNS server always stay at t
 
 CLIENT01 uses DC01 as its DNS server. This is important because the client needs to find the Active Directory domain and its services through DNS.
 
-![DC01 Network Configuration](screenshots/01-dc01-network.png)
+![DC01 Network Configuration](https://github.com/user-attachments/assets/592c591c-c309-4cb7-8960-dbba763fb1d2)
 
 ---
 
