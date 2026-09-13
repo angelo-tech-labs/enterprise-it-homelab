@@ -185,11 +185,11 @@ Before changing more settings, I checked the server side.
 
 I confirmed:
 
-- the Windows Server service was running
+- the Windows Server service (`LanmanServer`) was running
 - TCP port 445 was listening
 - DC01 was using the `DomainAuthenticated` network profile
 
-<!-- PASTE Screenshot 2026-09-12 110803.png HERE -->
+![DC01 SMB service, TCP 445 listener and DomainAuthenticated profile](https://github.com/user-attachments/assets/33432dbc-9b91-443a-b107-ea9f2dcb99d7)
 
 This helped confirm that the SMB service itself was running correctly on DC01.
 
@@ -207,7 +207,11 @@ The successful test returned:
 TcpTestSucceeded : True
 ```
 
-<!-- PASTE NEW CLIENT01 SCREENSHOT SHOWING PORT 445 = TRUE HERE -->
+![PowerShell TCP 445 test returning TcpTestSucceeded True](https://github.com/user-attachments/assets/fe1065a0-e916-4834-9434-61d5ed04e1c0)
+
+The screenshot above shows `SourceAddress: 10.10.10.10`, which is DC01 in this lab. It shows a successful TCP 445 test, but it does not document the connection from CLIENT01 at `10.10.10.20`.
+
+Ping only proves IP reachability. Testing TCP 445 checks whether the SMB port can be reached; the file-share tests check access to the files.
 
 This was useful because ping and a TCP port test answer two different questions:
 
