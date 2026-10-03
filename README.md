@@ -12,7 +12,7 @@ Rather than just installing Windows Server, I wanted to build something closer t
 |---|---|---|
 | Hyper-V Host | Lab gateway / NAT | 10.10.10.1 |
 | DC01 | Windows Server 2025 / Domain Controller / DNS | 10.10.10.10 |
-| CLIENT01 | Windows 11 domain workstation | 10.10.10.20 |
+| CLIENT01 | Windows 11 domain workstation | DHCP - normally 10.10.10.100 |
 
 **Domain:** `corp.example.com`  
 **Network:** `10.10.10.0/24`
@@ -266,1731 +266,481 @@ I found that Hyper-V Enhanced Session relies on Remote Desktop functionality, an
 For the file-share tests I switched back to the normal VM console instead of giving users extra RDP permissions just for the test.
 
 ---
+
 ## Group Policy
 
-After completing the initial Active Directory and file-server configuration, I started using Group Policy to manage user resources and restrictions centrally.
+I used Group Policy to manage departmental drives, user restrictions and domain account lockout settings centrally, then tested the results from CLIENT01.
 
 ### Department Drive Mapping
 
-I created:
+`GPO - Department Drive Maps` uses Group Policy Preferences with the **Update** action. Each mapping targets the corresponding departmental security group.
 
-```text
-GPO - Department Drive Maps
-```
+| Department | Drive | Share | Target group |
+|---|---|---|---|
+| Finance | F: | `\\DC01\Finance` | `GG-Finance` |
+| HR | H: | `\\DC01\HR` | `GG-HR` |
+| IT | I: | `\\DC01\IT` | `GG-IT` |
+| Sales | S: | `\\DC01\Sales` | `GG-Sales` |
 
-The GPO uses Group Policy Preferences to map departmental SMB shares as drive letters.
+The evidence below shows the Finance mapping, a populated `CORP\GG-IT` targeting condition, all four mappings, and the GPO linked to the Company OU.
 
-For example, the Finance mapping was configured as:
+<!-- Evidence E109: Uploaded filename preserved in pasted README: Screenshot 2026-09-15 201531.png
+Visible: Finance F drive, Update, \DC01\Finance. -->
+![Finance F drive, Update, \DC01\Finance](<evidence/Screenshot 2026-09-15 201531.png>)
 
-```text
-Path:  \\DC01\Finance
-Drive: F:
-Action: Update
-```
+<!-- Evidence E124: Local original: Screenshot 2026-09-16 194333.png. Original chat upload filename not established.
+Visible: Targeting Editor CORP\GG-IT selected. -->
+![Targeting Editor CORP\GG-IT selected](<evidence/Screenshot 2026-09-16 194333.png>)
 
-<!--
-FILE NAME: Screenshot 2026-09-15 201531.png
-EXACT CHAT FILE NAME.
+<!-- Evidence E128: Uploaded filename preserved in pasted README: Screenshot 2026-09-16 195658.png
+Visible: All four departmental drive mappings. -->
+![All four departmental drive mappings](<evidence/Screenshot 2026-09-16 195658.png>)
 
-SHOWS:
-Group Policy Management Editor
-Finance drive mapping
-\\DC01\Finance
-Drive F:
-Action = Update
--->
+<!-- Evidence E107: Uploaded filename preserved in pasted README: Screenshot 2026-09-13 121117.png
+Visible: Company OU drive-map GPO link enabled. -->
+![Company OU drive-map GPO link enabled](<evidence/Screenshot 2026-09-13 121117.png>)
 
-<!-- PASTE FILE: Screenshot 2026-09-15 201531.png -->
+I refreshed policy with `gpupdate /force` and verified that an authorised Finance user received the F: drive in File Explorer.
 
-I used Item-Level Targeting so that a drive is only mapped when the logged-in user belongs to the relevant Active Directory security group.
+<!-- Evidence E123: Uploaded filename preserved in pasted README: Screenshot 2026-09-16 193016.png
+Visible: gpupdate succeeds for computer and user. -->
+![gpupdate succeeds for computer and user](<evidence/Screenshot 2026-09-16 193016.png>)
 
-<!--
-FILE NAME: Screenshot 2026-09-15 202209.png
-EXACT CHAT FILE NAME.
+<!-- Evidence E114: Uploaded filename preserved in pasted README: Screenshot 2026-09-15 202947.png
+Visible: Finance F drive visible. -->
+![Finance F drive visible](<evidence/Screenshot 2026-09-15 202947.png>)
 
-SHOWS:
-Targeting Editor
-"The user is a member of the security group"
-Used for Item-Level Targeting.
--->
+### User Restriction GPO
 
-<!-- PASTE FILE: Screenshot 2026-09-15 202209.png -->
+I linked `GPO - User Restriction` to the HR OU and enabled **Prohibit access to Control Panel and PC settings**. Testing from the client produced the Windows restrictions message, confirming that the restriction applied.
 
-I eventually configured all four departmental mappings:
+<!-- Evidence E136: Uploaded filename preserved in pasted README: Screenshot 2026-09-17 195806.png
+Visible: HR restriction link and domain account policy in GPMC. -->
+![HR restriction link and domain account policy in GPMC](<evidence/Screenshot 2026-09-17 195806.png>)
 
-```text
-Finance -> F: -> \\DC01\Finance
-HR      -> H: -> \\DC01\HR
-IT      -> I: -> \\DC01\IT
-Sales   -> S: -> \\DC01\Sales
-```
+<!-- Evidence E130: Uploaded filename preserved in pasted README: Screenshot 2026-09-17 190443.png
+Visible: Prohibit Control Panel and PC settings enabled. -->
+![Prohibit Control Panel and PC settings enabled](<evidence/Screenshot 2026-09-17 190443.png>)
 
-<!--
-FILE NAME: Screenshot 2026-09-16 195658.png
-EXACT CHAT FILE NAME.
+<!-- Evidence E131: Uploaded filename preserved in pasted README: Screenshot 2026-09-17 193730.png
+Visible: Windows restriction message. -->
+![Windows restriction message](<evidence/Screenshot 2026-09-17 193730.png>)
 
-SHOWS:
-GPO - Department Drive Maps
-All four mappings:
-F: Finance
-H: HR
-I: IT
-S: Sales
--->
+### Domain Account Lockout Policy
 
-<!-- PASTE FILE: Screenshot 2026-09-16 195658.png -->
+The final domain policy locks an account after **5 invalid logon attempts**, with a **15-minute lockout** and **15-minute reset counter**.
 
-The drive-map GPO was linked into the company OU structure so that it could apply to departmental users.
+The first effective-policy check did not match the intended settings. After correcting policy precedence, `net accounts /domain` confirmed the effective values of **5 / 15 / 15**. I also reproduced an actual lockout, unlocked the account in Active Directory and verified sign-in. The later Alex Jira scenario documents this as a completed support incident.
 
-<!--
-FILE NAME: Screenshot 2026-09-13 121117.png
-EXACT CHAT FILE NAME.
+<!-- Evidence E133: Uploaded filename preserved in pasted README: Screenshot 2026-09-17 195307.png
+Visible: Lockout policy 5 attempts, 15 minute duration and reset. -->
+![Lockout policy 5 attempts, 15 minute duration and reset](<evidence/Screenshot 2026-09-17 195307.png>)
 
-SHOWS:
-Group Policy Management
-Company OU
-GPO - Department Drive Maps linked and enabled.
--->
+<!-- Evidence E137: Uploaded filename preserved in pasted README: Screenshot 2026-09-17 200232.png
+Visible: Effective lockout policy corrected to 5/15/15. -->
+![Effective lockout policy corrected to 5/15/15](<evidence/Screenshot 2026-09-17 200232.png>)
 
-<!-- PASTE FILE: Screenshot 2026-09-13 121117.png -->
+<!-- Evidence E140: Local original: Screenshot 2026-09-19 110318.png. Original chat upload filename not established.
+Visible: Alex actual lockout during initial policy test. -->
+![Alex actual lockout during initial policy test](<evidence/Screenshot 2026-09-19 110318.png>)
 
-After refreshing Group Policy and signing in with an authorised Finance user, Windows automatically mapped:
+<!-- Evidence E142: Local original: Screenshot 2026-09-19 110444.png. Original chat upload filename not established.
+Visible: Unlock account selected. -->
+![Unlock account selected](<evidence/Screenshot 2026-09-19 110444.png>)
 
-```text
-Finance (F:)
-```
-
-<!--
-FILE NAME: Screenshot 2026-09-15 202947.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-File Explorer > This PC
-Network Locations
-Finance (F:)
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-15 202947.png -->
-
-I also used:
-
-```cmd
-gpupdate /force
-```
-
-while testing policy changes.
-
-<!--
-FILE NAME: Screenshot 2026-09-16 193016.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-gpupdate /force
-Computer Policy update completed successfully
-User Policy update completed successfully
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-16 193016.png -->
-
----
-
-## User Restriction GPO
-
-I created another policy:
-
-```text
-GPO - User Restriction
-```
-
-This GPO was linked to the HR OU.
-
-<!--
-FILE NAME: Screenshot 2026-09-17 195806.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Group Policy Management tree
-HR OU
-GPO - User Restriction
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-17 195806.png -->
-
-The policy:
-
-```text
-Prohibit access to Control Panel and PC settings
-```
-
-was enabled.
-
-<!--
-FILE NAME: Screenshot 2026-09-17 190443.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-"Prohibit access to Control Panel and PC settings"
-Enabled.
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-17 190443.png -->
-
-I then tested it from the client.
-
-Windows prevented the restricted user from opening the setting and displayed:
-
-```text
-This operation has been cancelled due to restrictions
-in effect on this computer.
-```
-
-<!--
-FILE NAME: Screenshot 2026-09-17 193730.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Windows Restrictions message confirming that the policy is working.
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-17 193730.png -->
-
----
-
-## Domain Account Lockout Policy
-
-I also created a domain account-lockout policy.
-
-The final configuration was:
-
-```text
-Account lockout threshold:          5 invalid logon attempts
-Account lockout duration:           15 minutes
-Reset account lockout counter:      15 minutes
-```
-
-<!--
-FILE NAME: Screenshot 2026-09-17 195307.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Group Policy Management Editor
-Account Lockout Policy
-5 invalid logon attempts
-15 minute lockout
-15 minute reset counter
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-17 195307.png -->
-
-During testing I found that policy precedence affected which settings were actually active.
-
-After correcting the GPO link order, I verified the effective domain settings using:
-
-```cmd
-net accounts /domain
-```
-
-The final output showed:
-
-```text
-Lockout threshold:                   5
-Lockout duration:                   15
-Lockout observation window:         15
-```
-
-<!--
-FILE NAME: Screenshot 2026-09-17 200232.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-net accounts /domain
-Lockout threshold = 5
-Lockout duration = 15
-Observation window = 15
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-17 200232.png -->
-
-This lockout policy was later used in one of my Jira support scenarios.
-
----
+<!-- Evidence E143: Local original: Screenshot 2026-09-19 110738.png. Original chat upload filename not established.
+Visible: Alex Welcome after initial policy test. -->
+![Alex Welcome after initial policy test](<evidence/Screenshot 2026-09-19 110738.png>)
 
 ## DHCP and Client Networking
 
-I installed and authorised the DHCP Server role on DC01.
+I installed and authorised DHCP on DC01 and configured the `10.10.10.0/24` lab scope.
 
-I created a DHCP scope for:
+| Setting | Completed configuration |
+|---|---|
+| Address pool | `10.10.10.100–10.10.10.200` |
+| Subnet mask | `255.255.255.0` |
+| 003 Router | `10.10.10.1` |
+| 006 DNS Servers | `10.10.10.10` |
+| 015 DNS Domain Name | `corp.example.com` |
 
-```text
-10.10.10.0/24
-```
+CLIENT01 moved from its original static address to DHCP and normally received **10.10.10.100**. I checked the lease in DHCP Manager and verified the address, gateway, DHCP server and internal DNS server with `ipconfig /all`.
 
-with the address pool:
+<!-- Evidence E152: Local original: Screenshot 2026-09-19 114821.png. Original chat upload filename not established.
+Visible: Scope wizard corrected /24 pool .100-.200. -->
+![Scope wizard corrected /24 pool .100-.200](<evidence/Screenshot 2026-09-19 114821.png>)
 
-```text
-10.10.10.100 - 10.10.10.200
-```
+<!-- Evidence E159: Uploaded filename preserved in pasted README: Screenshot 2026-09-19 120055.png
+Visible: Final DHCP address pool. -->
+![Final DHCP address pool](<evidence/Screenshot 2026-09-19 120055.png>)
 
-<!--
-FILE NAME: Screenshot 2026-09-19 120055.png
-EXACT CHAT FILE NAME.
+<!-- Evidence E158: Uploaded filename preserved in pasted README: Screenshot 2026-09-19 120033.png
+Visible: Final router, DNS and domain scope options. -->
+![Final router, DNS and domain scope options](<evidence/Screenshot 2026-09-19 120033.png>)
 
-SHOWS:
-DHCP Manager
-Address Pool
-Start IP = 10.10.10.100
-End IP = 10.10.10.200
--->
+<!-- Evidence E172: Uploaded filename preserved in pasted README: Screenshot 2026-09-21 194649.png
+Visible: CLIENT01 DHCP lease 10.10.10.100. -->
+![CLIENT01 DHCP lease 10.10.10.100](<evidence/Screenshot 2026-09-21 194649.png>)
 
-<!-- PASTE FILE: Screenshot 2026-09-19 120055.png -->
-
-The following DHCP scope options were configured:
-
-```text
-003 Router:          10.10.10.1
-006 DNS Servers:     10.10.10.10
-015 DNS Domain Name: corp.example.com
-```
-
-<!--
-FILE NAME: Screenshot 2026-09-19 120033.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-DHCP Scope Options
-003 Router = 10.10.10.1
-006 DNS Servers = 10.10.10.10
-015 DNS Domain Name = corp.example.com
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-19 120033.png -->
-
-CLIENT01 was then changed from its original static configuration to DHCP.
-
-The DHCP server successfully issued:
-
-```text
-10.10.10.100
-```
-
-to CLIENT01.
-
-<!--
-FILE NAME: Screenshot 2026-09-21 194649.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-DHCP Manager
-Address Leases
-CLIENT01 = 10.10.10.100
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-21 194649.png -->
-
-I verified the client configuration with:
-
-```cmd
-ipconfig /all
-```
-
-The output confirmed:
-
-```text
-IPv4:        10.10.10.100
-Subnet:      255.255.255.0
-Gateway:     10.10.10.1
-DHCP Server: 10.10.10.10
-DNS Server:  10.10.10.10
-```
-
-<!--
-FILE NAME: Screenshot 2026-09-21 195852.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-CLIENT01 ipconfig /all
-IPv4 = 10.10.10.100
-Gateway = 10.10.10.1
-DHCP Server = 10.10.10.10
-DNS Server = 10.10.10.10
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-21 195852.png -->
-
----
+<!-- Evidence E178: Uploaded filename preserved in pasted README: Screenshot 2026-09-21 195852.png
+Visible: Client DHCP configuration including DNS .10. -->
+![Client DHCP configuration including DNS .10](<evidence/Screenshot 2026-09-21 195852.png>)
 
 ## PowerShell Administration
 
-I started using PowerShell alongside the GUI to inspect and administer Active Directory.
-
-For example:
+I used PowerShell alongside the management consoles to inspect domain users, groups, membership and account state.
 
 ```powershell
 Get-ADUser -Filter *
-```
-
-allowed me to query domain users.
-
-<!--
-FILE NAME: Screenshot 2026-09-21 195017.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Get-ADUser -Filter *
-including domain accounts such as Alex Morgan and Sam Wilson.
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-21 195017.png -->
-
-I also used:
-
-```powershell
 Get-ADGroup -Filter *
-```
-
-to inspect Active Directory groups.
-
-<!--
-FILE NAME: Screenshot 2026-09-21 195144.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Get-ADGroup -Filter *
-Active Directory group output.
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-21 195144.png -->
-
-To inspect individual departmental groups I used commands such as:
-
-```powershell
 Get-ADGroupMember "GG-IT"
-```
-
-<!--
-FILE NAME: Screenshot 2026-09-21 195248.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Get-ADGroupMember "GG-IT"
-Alex Morgan
-Sam Wilson
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-21 195248.png -->
-
-I repeated the same process with Finance.
-
-<!--
-FILE NAME: Screenshot 2026-09-21 195355.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
 Get-ADGroupMember "GG-Finance"
-Emily Clarke
-James Hall
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-21 195355.png -->
-
-I also queried individual users:
-
-```powershell
 Get-ADUser "alex.morgan"
 ```
 
-<!--
-FILE NAME: Screenshot 2026-09-21 195654.png
-EXACT CHAT FILE NAME.
+The results showed Alex Morgan and Sam Wilson in `GG-IT`, Emily Clarke and James Hall in `GG-Finance`, and Alex's enabled account in the IT OU.
 
-SHOWS:
-Get-ADUser "alex.morgan"
-DistinguishedName
-Enabled
-SamAccountName
-UserPrincipalName
--->
+<!-- Evidence E173: Uploaded filename preserved in pasted README: Screenshot 2026-09-21 195017.png
+Visible: Get-ADUser -Filter *. -->
+![Get-ADUser -Filter *](<evidence/Screenshot 2026-09-21 195017.png>)
 
-<!-- PASTE FILE: Screenshot 2026-09-21 195654.png -->
+<!-- Evidence E174: Uploaded filename preserved in pasted README: Screenshot 2026-09-21 195144.png
+Visible: Get-ADGroup -Filter *. -->
+![Get-ADGroup -Filter *](<evidence/Screenshot 2026-09-21 195144.png>)
 
-At this stage I am not trying to memorise every PowerShell command.
+<!-- Evidence E175: Uploaded filename preserved in pasted README: Screenshot 2026-09-21 195248.png
+Visible: GG-IT members Alex and Sam. -->
+![GG-IT members Alex and Sam](<evidence/Screenshot 2026-09-21 195248.png>)
 
-My main focus is learning what each command queries or changes and when it is useful during administration or troubleshooting.
+<!-- Evidence E176: Uploaded filename preserved in pasted README: Screenshot 2026-09-21 195355.png
+Visible: GG-Finance members Emily and James. -->
+![GG-Finance members Emily and James](<evidence/Screenshot 2026-09-21 195355.png>)
 
----
+<!-- Evidence E177: Uploaded filename preserved in pasted README: Screenshot 2026-09-21 195654.png
+Visible: Alex account enabled and in IT OU. -->
+![Alex account enabled and in IT OU](<evidence/Screenshot 2026-09-21 195654.png>)
 
 ## DNS Troubleshooting
 
-I deliberately introduced a DNS fault on CLIENT01.
+I deliberately configured CLIENT01 to use `8.8.8.8` instead of the lab DNS server `10.10.10.10`.
 
-Instead of using the internal domain DNS server:
+The client could still ping DC01 by IP, but its private-domain queries went to the public resolver. `ipconfig /all` exposed the incorrect DNS setting even though the IP address had come from the correct DHCP server.
 
-```text
-10.10.10.10
-```
+<!-- Evidence E179: Chat upload: image.png; source context: 21 September, around 20:01 2026. Matched local original: Screenshot 2026-09-21 200109.png
+Visible: Fault injection: DNS manually 8.8.8.8. -->
+![Fault injection: DNS manually 8.8.8.8](<evidence/Screenshot 2026-09-21 200109.png>)
 
-I manually configured:
+<!-- Evidence E180: Chat upload: image.png; source context: 23 September, around 18:21 2026. Matched local original: Screenshot 2026-09-23 182133.png
+Visible: Ping DC01 succeeds; DNS query goes to dns.google. -->
+![Ping DC01 succeeds; DNS query goes to dns.google](<evidence/Screenshot 2026-09-23 182133.png>)
 
-```text
-8.8.8.8
-```
+<!-- Evidence E182: Chat upload: image.png; source context: 23 September, around 18:33 2026. Matched local original: Screenshot 2026-09-23 183307.png
+Visible: Client DNS 8.8.8.8 despite DHCP IP. -->
+![Client DNS 8.8.8.8 despite DHCP IP](<evidence/Screenshot 2026-09-23 183307.png>)
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+I corrected the client to use DC01 for DNS and verified that `dc01.corp.example.com` resolved to **10.10.10.10**. The September troubleshooting included a direct internal-DNS setting; the final Sam ticket records restoring automatic DNS through DHCP.
 
-CHAT UPLOAD:
-21 September 2026 around 20:01 UK time.
+The before/after output below demonstrates the resolver change and successful private-name resolution. It also shows why a successful ping alone does not establish that domain DNS is working.
 
-SHOWS:
-IPv4 Properties
-Obtain IP address automatically
-Manual Preferred DNS server = 8.8.8.8
--->
+<!-- Evidence E187: Chat upload: image.png; source context: 23 September, around 18:58 2026. Matched local original: Screenshot 2026-09-23 185736.png
+Visible: Before/after DNS resolver and successful private A answer. -->
+![Before/after DNS resolver and successful private A answer](<evidence/Screenshot 2026-09-23 185736.png>)
 
-<!-- PASTE FILE: image.png - IPv4 Properties showing 8.8.8.8 -->
+## New Starter Administration — Mia Turner
 
-The client still had working IPv4 connectivity.
-
-A ping to DC01 by IP succeeded, but DNS queries were being sent to Google's public resolver.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-23 September 2026 around 18:21 UK time.
-
-SHOWS:
-Successful ping to 10.10.10.10
-followed by nslookup
-Server = dns.google
-Address = 8.8.8.8
--->
-
-<!-- PASTE FILE: image.png - ping works but DNS points to Google -->
-
-`ipconfig /all` confirmed the underlying problem:
-
-```text
-DNS Servers: 8.8.8.8
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-23 September 2026 around 18:33 UK time.
-
-SHOWS:
-CLIENT01 ipconfig /all
-IPv4 = 10.10.10.100
-DHCP Server = 10.10.10.10
-DNS Servers = 8.8.8.8
--->
-
-<!-- PASTE FILE: image.png - ipconfig showing DNS 8.8.8.8 -->
-
-I restored the adapter to obtain its DNS configuration automatically from DHCP.
-
-A final `nslookup` then used DC01 and correctly resolved the private hostname.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-23 September 2026 around 18:58 UK time.
-
-SHOWS BOTH TESTS IN THE SAME POWERSHELL WINDOW:
-
-Before:
-Server = dns.google
-Address = 8.8.8.8
-
-After:
-Server = Unknown
-Address = 10.10.10.10
-Name = dc01.corp.example.com
-Address = 10.10.10.10
--->
-
-<!-- PASTE FILE: image.png - DNS before and after -->
-
-This was a useful demonstration that:
-
-```text
-IP connectivity working
-```
-
-does not automatically mean:
-
-```text
-DNS is configured correctly
-```
-
----
-
-## New Starter Administration - Mia Turner
-
-I completed a new-starter workflow for a fictional Sales user called Mia Turner.
-
-I initially created the account using PowerShell:
+I completed an onboarding workflow for the fictional Sales user **Mia Turner**. I created the account with PowerShell, moved it into the Sales OU, set its password securely, enabled it and added the required Sales membership.
 
 ```powershell
-New-ADUser
+New-ADUser -Name "Mia Turner" -SamAccountName "mia.turner" `
+    -UserPrincipalName "mia.turner@corp.example.com"
+Get-ADUser "mia.turner" | Move-ADObject `
+    -TargetPath "OU=Sales,OU=Company,DC=corp,DC=example,DC=com"
 ```
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+The verification screenshots show the completed account state: **Enabled = True**, the **Sales OU**, and membership of **GG-Sales**.
 
-CHAT UPLOAD:
-24 September 2026 around 12:31 UK time.
+<!-- Evidence E189: Chat upload: image.png; source context: 24 September, around 12:31 2026. Matched local original: Screenshot 2026-09-24 123051.png
+Visible: New-ADUser creates Mia. -->
+![New-ADUser creates Mia](<evidence/Screenshot 2026-09-24 123051.png>)
 
-SHOWS:
-New-ADUser
-Name = Mia Turner
-SamAccountName = mia.turner
-UserPrincipalName = mia.turner@corp.example.com
--->
+<!-- Evidence E194: Chat upload: image.png; source context: 24 September, around 13:03 2026. Matched local original: Screenshot 2026-09-24 130315.png
+Visible: Mia enabled in Sales OU. -->
+![Mia enabled in Sales OU](<evidence/Screenshot 2026-09-24 130315.png>)
 
-<!-- PASTE FILE: image.png - Mia New-ADUser -->
+<!-- Evidence E195: Chat upload: image.png; source context: 24 September, around 13:10 2026. Matched local original: Screenshot 2026-09-24 131009.png
+Visible: GG-Sales membership includes Mia. -->
+![GG-Sales membership includes Mia](<evidence/Screenshot 2026-09-24 131009.png>)
 
-Immediately after creation I queried the account.
+I checked the actual user's context with `gpresult /r`, confirmed Sales membership in the user token and verified the mapped Sales S: drive. The early group-result screenshot shows `GG-Sales` but no applied user GPO at that point; the working drive is the later outcome evidence.
 
-The account existed but was initially:
+<!-- Evidence E201: Chat upload: image.png; source context: 24 September, around 14:01 2026. Matched local original: Screenshot 2026-09-24 140143.png
+Visible: gpresult identifies Mia and Sales OU. -->
+![gpresult identifies Mia and Sales OU](<evidence/Screenshot 2026-09-24 140143.png>)
 
-```text
-Enabled : False
-```
+<!-- Evidence E202: Chat upload: image.png; source context: 24 September, around 14:05 2026. Matched local original: Screenshot 2026-09-24 140453.png
+Visible: Mia token includes GG-Sales; Applied GPO list is N/A at this point. -->
+![Mia token includes GG-Sales; Applied GPO list is N/A at this point](<evidence/Screenshot 2026-09-24 140453.png>)
 
-and was still in the default Users container.
+<!-- Evidence E205: Chat upload: image.png; source context: 24 September, around 14:13 2026. Matched local original: Screenshot 2026-09-24 141318.png
+Visible: Mia Sales S drive working. -->
+![Mia Sales S drive working](<evidence/Screenshot 2026-09-24 141318.png>)
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+The final October verification and completed Jira request are documented below under Mia's support scenario.
 
-CHAT UPLOAD:
-24 September 2026 around 12:34 UK time.
+## Wireshark Basics — Completed
 
-SHOWS:
-Get-ADUser "mia.turner"
-Enabled = False
-CN=Mia Turner,CN=Users...
--->
+I completed packet-capture exercises for **ICMP, ARP, DNS, the TCP three-way handshake, SMB2 and DHCP DORA**, using traffic generated in the lab.
 
-<!-- PASTE FILE: image.png - Mia initially disabled -->
-
-I then moved the account into the Sales OU, set a temporary password and enabled it.
-
-After the changes, the account showed:
-
-```text
-CN=Mia Turner,OU=Sales,OU=Company,...
-Enabled : True
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-24 September 2026 around 13:03 UK time.
-
-SHOWS:
-Mia Turner
-OU=Sales
-Enabled = True
-SamAccountName = mia.turner
-UserPrincipalName = mia.turner@corp.example.com
--->
-
-<!-- PASTE FILE: image.png - Mia enabled in Sales OU -->
-
-I added Mia to:
-
-```text
-GG-Sales
-```
-
-and verified the group membership.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-24 September 2026 around 13:10 UK time.
-
-SHOWS:
-Get-ADGroupMember "gg-sales"
-
-Members include:
-Sophie Brown
-Daniel King
-Mia Turner
--->
-
-<!-- PASTE FILE: image.png - GG-Sales containing Mia -->
-
-After logging into CLIENT01 as Mia I checked the Group Policy context using:
-
-```cmd
-gpresult /r
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-24 September 2026 around 14:01 UK time.
-
-SHOWS:
-RSOP data for CORP\mia.turner on CLIENT-01
-CN=Mia Turner,OU=Sales,OU=Company...
-Group Policy applied from DC01.corp.example.com
--->
-
-<!-- PASTE FILE: image.png - gpresult for Mia -->
-
-The security-group output also showed:
-
-```text
-GG-Sales
-```
-
-in Mia's user context.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-24 September 2026 around 14:05 UK time.
-
-SHOWS:
-gpresult /r
-Security groups
-GG-Sales
--->
-
-<!-- PASTE FILE: image.png - Mia GG-Sales in logon context -->
-
-The Sales drive then mapped automatically:
-
-```text
-Sales (\\DC01) (S:)
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-24 September 2026 around 14:13 UK time.
-
-SHOWS:
-File Explorer > This PC
-Network Locations
-Sales (\\DC01) (S:)
--->
-
-<!-- PASTE FILE: image.png - Mia Sales S drive -->
-
-This exercise combined:
-
-```text
-Account creation
-OU placement
-Password management
-Account enablement
-Security-group membership
-Domain login
-Group Policy
-Resource access
-```
-
----
-
-## Packet Analysis with Wireshark
-
-I installed Wireshark on CLIENT01 to observe the actual network traffic generated by the lab.
-
-This helped connect the Windows Server work with the networking concepts I am studying for the CCNA.
+| Exercise | Display filter | What I identified |
+|---|---|---|
+| ICMP | `icmp` | Echo requests and replies between CLIENT01 and DC01 |
+| ARP | `arp` | IPv4-to-MAC address resolution |
+| DNS | `dns.qry.name contains "dc01"` | Private hostname query and A-record answer |
+| TCP | `tcp.port == 445` | SYN → SYN/ACK → ACK |
+| SMB2 | `smb2` | Session and file-resource operations |
+| DHCP | `dhcp` | Discover → Offer → Request → ACK |
 
 ### ICMP
 
-I captured traffic between:
+The capture shows echo requests from `10.10.10.100` to `10.10.10.10` and replies in the opposite direction.
 
-```text
-CLIENT01 10.10.10.100
-DC01     10.10.10.10
-```
-
-The capture clearly showed:
-
-```text
-Echo Request
-Echo Reply
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-26 September 2026 around 09:14 UK time.
-
-SHOWS:
-Wireshark filter = icmp
-10.10.10.100 -> 10.10.10.10 Echo request
-10.10.10.10 -> 10.10.10.100 Echo reply
--->
-
-<!-- PASTE FILE: image.png - Wireshark ICMP -->
+<!-- Evidence E217: Chat upload: image.png; source context: 26 September, around 09:14 2026. Matched local original: Screenshot 2026-09-26 091350.png
+Visible: ICMP echo request/reply between .100 and .10. -->
+![ICMP echo request/reply between .100 and .10](<evidence/Screenshot 2026-09-26 091350.png>)
 
 ### ARP
 
-I cleared the ARP cache and generated new traffic.
+I identified the request **Who has 10.10.10.100? Tell 10.10.10.10** and the response identifying CLIENT01 as **00:15:5d:01:68:02**.
 
-The capture showed IPv4-to-MAC address resolution.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-26 September 2026 around 09:24 UK time.
-
-SHOWS:
-Wireshark filter = arp
-
-Who has 10.10.10.100? Tell 10.10.10.10
-
-10.10.10.100 is at 00:15:5d:01:68:02
--->
-
-<!-- PASTE FILE: image.png - Wireshark ARP -->
-
-This reinforced the relationship:
-
-```text
-IPv4 address
-      ↓
-ARP
-      ↓
-MAC address
-      ↓
-Ethernet delivery
-```
+<!-- Evidence E219: Chat upload: image.png; source context: 26 September, around 09:24 2026. Matched local original: Screenshot 2026-09-26 092420.png
+Visible: ARP request/reply identifying client MAC. -->
+![ARP request/reply identifying client MAC](<evidence/Screenshot 2026-09-26 092420.png>)
 
 ### DNS
 
-I generated a DNS lookup for:
+Filtering for `dc01` isolated the lookup of `dc01.corp.example.com` and the response containing **A 10.10.10.10**.
 
-```text
-dc01.corp.example.com
-```
-
-and filtered the traffic in Wireshark.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-27 September 2026 around 10:26 UK time.
-
-SHOWS:
-Wireshark filter:
-dns.qry.name contains "dc01"
-
-Includes:
-query for dc01.corp.example.com
-response A 10.10.10.10
--->
-
-<!-- PASTE FILE: image.png - Wireshark DNS -->
-
-The capture showed the client sending the query to DC01 and receiving:
-
-```text
-A 10.10.10.10
-```
+<!-- Evidence E221: Chat upload: image.png; source context: 27 September, around 10:26 2026. Matched local original: Screenshot 2026-09-27 102527.png
+Visible: Filtered dc01 DNS query and A response. -->
+![Filtered dc01 DNS query and A response](<evidence/Screenshot 2026-09-27 102527.png>)
 
 ### TCP Three-Way Handshake
 
-I captured an SMB TCP connection to port:
+Packets **2673–2675** show the complete handshake between client port **52581** and DC01 port **445**: SYN, SYN/ACK, then ACK. This separates transport connection establishment from the SMB operations that follow.
 
-```text
-445
-```
-
-and identified the TCP three-way handshake:
-
-```text
-SYN
-SYN, ACK
-ACK
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-27 September 2026 around 10:42 UK time.
-
-SHOWS:
-Wireshark TCP traffic on port 445.
-
-Capture includes the new connection around the packets ending in:
-52581 -> 445
-445 -> 52581
-52581 -> 445
--->
-
-<!-- PASTE FILE: image.png - TCP 445 handshake -->
+<!-- Evidence E222: Chat upload: image.png; source context: 27 September, around 10:42 2026. Matched local original: Screenshot 2026-09-27 104139.png
+Visible: TCP 445 three-way handshake packets 2673-2675. -->
+![TCP 445 three-way handshake packets 2673-2675](<evidence/Screenshot 2026-09-27 104139.png>)
 
 ### SMB2
 
-I also captured the actual SMB2 application traffic produced while Windows accessed network resources.
+I inspected SMB2 negotiation, session setup, tree connection and resource operations. The focused capture shows Create Request/Response and Close Request/Response pairs; the wider capture adds session context.
 
-The capture included operations such as:
+<!-- Evidence E224: Local original: Screenshot 2026-09-27 104800.png. Original chat upload filename not established.
+Visible: SMB2 negotiate, session setup and tree connect. -->
+![SMB2 negotiate, session setup and tree connect](<evidence/Screenshot 2026-09-27 104800.png>)
 
-```text
-Negotiate Protocol
-Session Setup
-Tree Connect
-Create
-Close
-Tree Disconnect
-Session Logoff
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-27 September 2026 around 10:52 UK time.
-
-SHOWS:
-Wireshark filter = smb2
-Create Request
-Create Response
-Close Request
-Close Response
--->
-
-<!-- PASTE FILE: image.png - SMB2 Create and Close -->
-
-This provided a useful view of what happens below File Explorer when a user accesses an SMB resource.
+<!-- Evidence E226: Chat upload: image.png; source context: 27 September, around 10:52 2026. Matched local original: Screenshot 2026-09-27 105151.png
+Visible: SMB2 Create and Close request/response. -->
+![SMB2 Create and Close request/response](<evidence/Screenshot 2026-09-27 105151.png>)
 
 ### DHCP DORA
 
-I released and renewed CLIENT01's lease while Wireshark was capturing.
+I released and renewed CLIENT01's lease while capturing. Following the Release, packets **98–101** show the full Discover, Offer, Request and ACK exchange with a shared transaction ID. The Discover uses `0.0.0.0` and the broadcast destination `255.255.255.255`.
 
-The complete DHCP process was visible:
+<!-- Evidence E227: Chat upload: image.png; source context: 27 September, around 10:56 2026. Matched local original: Screenshot 2026-09-27 105539.png
+Visible: DHCP Release followed by complete DORA. -->
+![DHCP Release followed by complete DORA](<evidence/Screenshot 2026-09-27 105539.png>)
 
-```text
-Discover
-Offer
-Request
-ACK
-```
+## Unexpected Hyper-V Network Fault — Resolved
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+While preparing the support scenarios, CLIENT01 unexpectedly lost communication with DC01. This was a real lab fault encountered during the work.
 
-CHAT UPLOAD:
-27 September 2026 around 10:56 UK time.
+### Symptoms and Checks
 
-SHOWS:
-Wireshark filter = dhcp
+`whoami` identified `CORP\alex.morgan`, but `nltest /sc_query:corp.example.com` returned **ERROR_NO_LOGON_SERVERS** and DNS requests to DC01 timed out. An existing session and a `LOGONSERVER` value were not enough to prove that the domain controller was currently reachable.
 
-DHCP Release
-DHCP Discover
-DHCP Offer
-DHCP Request
-DHCP ACK
+<!-- Evidence E245: Chat upload: image.png; source context: 29 September, around 19:06 2026. Matched local original: Screenshot 2026-09-29 190603.png
+Visible: Logon server variable plus ERROR_NO_LOGON_SERVERS. -->
+![Logon server variable plus ERROR_NO_LOGON_SERVERS](<evidence/Screenshot 2026-09-29 190603.png>)
 
-Discover:
-0.0.0.0 -> 255.255.255.255
--->
+<!-- Evidence E246: Chat upload: image.png; source context: 29 September, around 19:08 2026. Matched local original: Screenshot 2026-09-29 190753.png
+Visible: DC01 DNS lookup times out. -->
+![DC01 DNS lookup times out](<evidence/Screenshot 2026-09-29 190753.png>)
 
-<!-- PASTE FILE: image.png - DHCP DORA -->
+Both machines still had their expected IPv4 settings. DC01's DNS, KDC and Netlogon services were running, and DNS had UDP 53 listeners.
 
-This also showed why a DHCP client initially uses:
+<!-- Evidence E247: Chat upload: image.png; source context: 29 September, around 19:10, DC01 2026. Matched local original: Screenshot 2026-09-29 190929.png
+Visible: DC01 correct static IP and guest MAC. -->
+![DC01 correct static IP and guest MAC](<evidence/Screenshot 2026-09-29 190929.png>)
 
-```text
-0.0.0.0
-```
+<!-- Evidence E248: Chat upload: image.png; source context: 29 September, around 19:10, CLIENT01 2026. Matched local original: Screenshot 2026-09-29 191001.png
+Visible: CLIENT01 correct DHCP IP and internal DNS. -->
+![CLIENT01 correct DHCP IP and internal DNS](<evidence/Screenshot 2026-09-29 191001.png>)
 
-and broadcast:
+<!-- Evidence E249: Chat upload: image.png; source context: 29 September, around 19:11 2026. Matched local original: Screenshot 2026-09-29 191052.png
+Visible: DNS, KDC, Netlogon running; UDP 53 listeners. -->
+![DNS, KDC, Netlogon running; UDP 53 listeners](<evidence/Screenshot 2026-09-29 191052.png>)
 
-```text
-255.255.255.255
-```
+A failed ping alongside a DC01 entry in the client's ARP table prompted closer inspection of the virtual adapters. The cache entry was useful evidence to compare; it did not by itself prove working end-to-end communication.
 
-before it has its own IPv4 configuration.
+<!-- Evidence E252: Chat upload: image.png; source context: 29 September, around 19:46 2026. Matched local original: Screenshot 2026-09-29 194609.png
+Visible: Ping fails while ARP table contains DC01 entry. -->
+![Ping fails while ARP table contains DC01 entry](<evidence/Screenshot 2026-09-29 194609.png>)
 
----
+### Adapter Mismatch and Recovery
 
-## Jira Service Management
+The host reported both VMs on `LabSwitch`, with untagged VLAN settings and no adapter isolation. However, the reported DC01 MAC addresses differed:
 
-I created an:
+| View | DC01 MAC address |
+|---|---|
+| Hyper-V host | `00-15-5D-01-68-03` |
+| Inside DC01 | `00-15-5D-01-68-00` |
 
-```text
-Enterprise IT Service Desk
-```
+This mismatch was the key clue in the adapter investigation.
 
-in Jira Service Management so that I could document faults in a more realistic support workflow.
+<!-- Evidence E257: Chat upload: image.png; source context: 29 September, around 19:59 2026. Matched local original: Screenshot 2026-09-29 195825.png
+Visible: Host VM MAC, VLAN and isolation diagnostics. -->
+![Host VM MAC, VLAN and isolation diagnostics](<evidence/Screenshot 2026-09-29 195825.png>)
 
-The general process I practised was:
+<!-- Evidence E259: Chat upload: image.png; source context: 29 September, around 20:04 2026. Matched local original: Screenshot 2026-09-29 200340.png
+Visible: DC01 guest MAC ends 6800. -->
+![DC01 guest MAC ends 6800](<evidence/Screenshot 2026-09-29 200340.png>)
 
-```text
-User reports issue
-        ↓
-Ticket created
-        ↓
-Assign / investigate
-        ↓
-Reproduce issue
-        ↓
-Identify root cause
-        ↓
-Apply fix
-        ↓
-Verify
-        ↓
-Document resolution
-        ↓
-Close ticket
-```
+I shut down DC01 and configured a consistent static virtual-adapter MAC matching the expected guest address. Communication returned, allowing DNS, SMB and domain-authentication testing to continue.
 
-I created several example tickets based on faults that could actually be reproduced in the Hyper-V lab.
+This exercise reinforced checking IPv4 settings, services, ARP entries and virtual-switch configuration before treating a DNS or sign-in symptom as the root cause. The screenshots document the investigation; the recovery outcome was confirmed during the lab work.
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+## Jira Service Management — Completed Support Scenarios
 
-CHAT UPLOAD:
-30 September 2026 around 20:25 UK time.
+I used **Enterprise IT Service Desk** in Jira Service Management to practise a complete support workflow: record the reported symptom, investigate, apply a fix, verify the user outcome and document the resolution.
 
-SHOWS:
-Jira ticket list including:
-Alex Morgan cannot open Settings or Control Panel
-Daniel King lost network access
-Sam Wilson cannot reach DC01 by internal name
-James Hall Access Denied opening Finance folder
-Sophie Brown cannot see Sales S drive
--->
+The four scenarios selected for this v1.0 portfolio are complete:
 
-<!-- PASTE FILE: image.png - Jira support ticket list -->
+| User | Scenario | Completed outcome |
+|---|---|---|
+| Alex Morgan | Account lockout | Account unlocked; sign-in verified; ticket completed |
+| Sophie Brown | Missing Sales S: drive | Sales membership restored; fresh sign-in; drive restored |
+| Sam Wilson | Cannot resolve DC01 by internal name | Internal DNS restored through DHCP; name resolution verified; ticket completed |
+| Mia Turner | New-starter access verification | Enabled Sales account, correct group, sign-in and S: drive verified; request resolved |
 
-Rather than completing every fictional scenario, I selected several useful examples that demonstrated different troubleshooting skills.
+### Alex Morgan — Account Lockout
 
----
+I reproduced a genuine domain lockout. Windows displayed **The referenced account is currently locked out and may not be logged on to**, and ADUC confirmed that the account was currently locked on the domain controller.
 
-## Unexpected Hyper-V Network Fault
+<!-- Evidence E265: Chat upload: image.png; source context: 30 September, around 19:54 2026. Matched local original: Screenshot 2026-09-30 185327.png
+Visible: Alex genuine locked-out sign-in message. -->
+![Alex genuine locked-out sign-in message](<evidence/Screenshot 2026-09-30 185327.png>)
 
-While preparing the support scenarios, CLIENT01 unexpectedly lost communication with DC01.
+<!-- Evidence E266: Chat upload: image.png; source context: 30 September, around 19:55 2026. Matched local original: Screenshot 2026-09-30 185402.png
+Visible: ADUC confirms current lockout; unlock selected. -->
+![ADUC confirms current lockout; unlock selected](<evidence/Screenshot 2026-09-30 185402.png>)
 
-This was not an intentionally created fault.
+I unlocked Alex's account and verified successful sign-in to CLIENT01. The Jira resolution note records the fix and verification; the final ticket list shows **ITSD-1 — Completed / Done**.
 
-### Domain Authentication Failure
+<!-- Evidence E272: Uploaded filename preserved in pasted README: Screenshot 2026-09-30 192243.png
+Visible: Alex resolution Done and internal note. -->
+![Alex resolution Done and internal note](<evidence/Screenshot 2026-09-30 192243.png>)
 
-CLIENT01 was logged in as:
+<!-- Evidence E273: Chat upload: image.png; source context: 30 September, around 20:24 2026. Matched local original: Screenshot 2026-09-30 192328.png
+Visible: Alex ITSD-1 Completed / Done. -->
+![Alex ITSD-1 Completed / Done](<evidence/Screenshot 2026-09-30 192328.png>)
 
-```text
-CORP\alex.morgan
-```
+### Sophie Brown — Missing Sales Drive
 
-but:
+Sophie's Sales S: drive was missing. Her current token lacked `GG-Sales`, and ADUC showed only `Domain Users`, explaining why she did not meet the group condition for the Sales mapping.
 
-```cmd
-nltest /sc_query:corp.example.com
-```
+<!-- Evidence E275: Chat upload: image.png; source context: 1 October, around 19:18 2026. Matched local original: Screenshot 2026-10-01 191750.png
+Visible: Sophie Sales drive absent. -->
+![Sophie Sales drive absent](<evidence/Screenshot 2026-10-01 191750.png>)
 
-returned:
+<!-- Evidence E277: Chat upload: image.png; source context: 1 October, around 19:22 2026. Matched local original: Screenshot 2026-10-01 192123.png
+Visible: Filtered token query returns no GG-Sales. -->
+![Filtered token query returns no GG-Sales](<evidence/Screenshot 2026-10-01 192123.png>)
 
-```text
-ERROR_NO_LOGON_SERVERS
-```
+<!-- Evidence E278: Chat upload: image.png; source context: 1 October, around 19:24 2026. Matched local original: Screenshot 2026-10-01 192353.png
+Visible: Sophie AD membership Domain Users only. -->
+![Sophie AD membership Domain Users only](<evidence/Screenshot 2026-10-01 192353.png>)
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+I restored `GG-Sales` membership and checked the updated account. The existing session still lacked the group, so I fully signed Sophie out and back in to obtain a fresh security token. Refreshing Group Policy alone did not replace that token.
 
-CHAT UPLOAD:
-29 September 2026 around 19:06 UK time.
+<!-- Evidence E280: Uploaded filename preserved in pasted README: Screenshot 2026-10-01 192441.png
+Visible: Add Sophie to GG-Sales. -->
+![Add Sophie to GG-Sales](<evidence/Screenshot 2026-10-01 192441.png>)
 
-SHOWS:
-whoami = corp\alex.morgan
-LOGONSERVER = \\DC01
-nltest /sc_query:corp.example.com
-ERROR_NO_LOGON_SERVERS
--->
+<!-- Evidence E281: Uploaded filename preserved in pasted README: Screenshot 2026-10-01 192449.png
+Visible: Sophie AD membership corrected. -->
+![Sophie AD membership corrected](<evidence/Screenshot 2026-10-01 192449.png>)
 
-<!-- PASTE FILE: image.png - nltest no logon servers -->
+<!-- Evidence E283: Local original: Screenshot 2026-10-01 193033.png. Original chat upload filename not established.
+Visible: Token still lacks GG-Sales before fresh sign-in. -->
+![Token still lacks GG-Sales before fresh sign-in](<evidence/Screenshot 2026-10-01 193033.png>)
 
-DNS queries to DC01 also timed out.
+The drive-map policy was present in `gpresult /r`, and the final client check showed **Sales (\\DC01) (S:)** restored. The support scenario was completed with the verified user outcome.
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+<!-- Evidence E284: Chat upload: image.png; source context: 1 October, around 19:32 2026. Matched local original: Screenshot 2026-10-01 193111.png
+Visible: Sophie drive-map GPO applied. -->
+![Sophie drive-map GPO applied](<evidence/Screenshot 2026-10-01 193111.png>)
 
-CHAT UPLOAD:
-29 September 2026 around 19:08 UK time.
+<!-- Evidence E285: Chat upload: image.png; source context: 1 October, around 19:37 2026. Matched local original: Screenshot 2026-10-01 193604.png
+Visible: Sophie Sales S drive restored. -->
+![Sophie Sales S drive restored](<evidence/Screenshot 2026-10-01 193604.png>)
 
-SHOWS:
-nslookup dc01.corp.example.com
-Server = Unknown
-Address = 10.10.10.10
-DNS request timed out
--->
+### Sam Wilson — Internal DNS Resolution
 
-<!-- PASTE FILE: image.png - DNS timeout during Hyper-V fault -->
+Sam's scenario used the reproduced client DNS fault documented above: CLIENT01 pointed to `8.8.8.8` instead of the internal DNS server. I restored automatic DNS configuration through DHCP, confirmed `10.10.10.10` as the DNS server and verified resolution of `dc01.corp.example.com`.
 
-I checked both systems' IPv4 configurations.
+I documented the cause, correction and verification in Jira and completed the ticket. The screenshot below captures the resolution note with **Done** selected; the earlier DNS screenshots provide the technical before/after evidence.
 
-DC01 still had:
+<!-- Evidence E290: Chat upload: image.png; source context: 3 October, Sam resolution 2026. Matched local original: Screenshot 2026-10-03 093223.png
+Visible: Sam DNS resolution note, Done selected. -->
+![Sam DNS resolution note, Done selected](<evidence/Screenshot 2026-10-03 093223.png>)
 
-```text
-IPv4:   10.10.10.10
-Gateway: 10.10.10.1
-DNS:     10.10.10.10 / ::1
-```
+### Mia Turner — Final New-Starter Verification
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+For **ITSD-4**, I checked Mia's existing account rather than creating a duplicate. Final verification confirmed:
 
-CHAT UPLOAD:
-29 September 2026 around 19:10 UK time.
+- The account was **enabled** and located in the **Sales OU**.
+- Membership included **GG-Sales**.
+- Mia could sign in to CLIENT01 and access the **Sales S: drive**.
 
-SHOWS:
-DC01 ipconfig
-IPv4 = 10.10.10.10
-Gateway = 10.10.10.1
-DNS = ::1 and 10.10.10.10
-MAC = 00-15-5D-01-68-00
--->
+The October screenshots below show the group membership, PowerShell account check and working drive.
 
-<!-- PASTE FILE: image.png - DC01 IP configuration -->
+<!-- Evidence E294: Chat upload: image.png; source context: 3 October, Mia group verification 2026. Matched local original: Screenshot 2026-10-03 095918.png
+Visible: Mia Member Of includes GG-Sales. -->
+![Mia Member Of includes GG-Sales](<evidence/Screenshot 2026-10-03 095918.png>)
 
-CLIENT01 also still had the expected DHCP configuration:
+<!-- Evidence E295: Chat upload: image.png; source context: 3 October, Mia account verification 2026. Matched local original: Screenshot 2026-10-03 100359.png
+Visible: Mia enabled and in Sales OU via PowerShell. -->
+![Mia enabled and in Sales OU via PowerShell](<evidence/Screenshot 2026-10-03 100359.png>)
 
-```text
-IPv4:        10.10.10.100
-Gateway:     10.10.10.1
-DHCP Server: 10.10.10.10
-DNS Server:  10.10.10.10
-```
+<!-- Evidence E296: Chat upload: image.png; source context: 3 October, Mia drive verification 2026. Matched local original: Screenshot 2026-10-03 100532.png
+Visible: Mia Sales S drive visible in final verification. -->
+![Mia Sales S drive visible in final verification](<evidence/Screenshot 2026-10-03 100532.png>)
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
+I recorded the completed checks in Jira. The final saved ticket shows **Resolved / Done**, with the internal note confirming that the new starter's access was ready for use.
 
-CHAT UPLOAD:
-29 September 2026 around 19:10 UK time.
+<!-- Evidence E298: Chat upload: image.png; source context: 3 October, final Mia resolved ticket 2026. Matched local original: Screenshot 2026-10-03 101527.png
+Visible: Mia ITSD-4 Resolved / Done with saved internal note. -->
+![Mia ITSD-4 Resolved / Done with saved internal note](<evidence/Screenshot 2026-10-03 101527.png>)
 
-SHOWS:
-CLIENT01 ipconfig
-IPv4 = 10.10.10.100
-Gateway = 10.10.10.1
-DHCP Server = 10.10.10.10
-DNS = 10.10.10.10
--->
+## Skills Demonstrated
 
-<!-- PASTE FILE: image.png - CLIENT01 IP configuration -->
+- Hyper-V internal switching, NAT and virtual-adapter troubleshooting.
+- Windows Server 2025, Active Directory, OUs, users and departmental security groups.
+- Windows 11 domain membership and user-side verification.
+- SMB shares, Share/NTFS permissions and authorised/unauthorised access tests.
+- Group Policy Preferences, group targeting, restrictions and account lockout.
+- DHCP scope configuration, leases and internal DNS troubleshooting.
+- PowerShell account, group, service and network checks.
+- New-starter onboarding and access verification.
+- Wireshark analysis of ICMP, ARP, DNS, TCP, SMB2 and DHCP DORA.
+- Jira incident documentation, troubleshooting, verification and resolution.
 
-I also verified that the core domain services on DC01 were running:
+## Project Complete — v1.0
 
-```text
-DNS
-KDC
-Netlogon
-```
+**Completed: 3 October 2026.**
 
-and that DNS was listening on UDP port 53.
+The Enterprise IT Support Homelab v1.0 is complete: infrastructure, Active Directory, departmental access, Group Policy, DHCP/DNS, PowerShell administration, Mia's onboarding, all six Wireshark basics exercises, Hyper-V troubleshooting and the four selected Jira support scenarios.
 
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-29 September 2026 around 19:11 UK time.
-
-SHOWS:
-Get-Service DNS,Netlogon,KDC
-all Running
-
-Get-NetUDPEndpoint -LocalPort 53
-DNS listening on port 53
--->
-
-<!-- PASTE FILE: image.png - domain services and UDP 53 -->
-
-### ARP Worked While IP Communication Failed
-
-One of the most useful clues came from testing ARP and ping together.
-
-The client failed to ping DC01, but its ARP table still contained a MAC address for:
-
-```text
-10.10.10.10
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-29 September 2026 around 19:46 UK time.
-
-SHOWS:
-ping 10.10.10.10 = timeout
-
-arp -a still contains:
-10.10.10.1  -> 00-15-5D-01-68-01
-10.10.10.10 -> 00-15-5D-01-68-00
--->
-
-<!-- PASTE FILE: image.png - ping fails but ARP resolves -->
-
-This showed that neighbour discovery was still occurring even though higher-level communication was failing.
-
-### Hyper-V Adapter Investigation
-
-I checked the virtual adapters from the Hyper-V host.
-
-Both VMs were attached to:
-
-```text
-LabSwitch
-```
-
-and both reported an OK status.
-
-The host showed:
-
-```text
-Client01 MAC: 00155D016802
-DC01 MAC:     00155D016803
-```
-
-Both adapters were untagged and had no isolation configured.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-29 September 2026 around 19:59 UK time.
-
-SHOWS:
-Get-VMNetworkAdapter
-Client01 LabSwitch 00155D016802 {Ok}
-DC01 LabSwitch     00155D016803 {Ok}
-
-Both VLAN = Untagged
-IsolationMode = None
--->
-
-<!-- PASTE FILE: image.png - Hyper-V adapter diagnostics -->
-
-The important clue appeared when I compared that with the MAC address inside DC01.
-
-Inside the guest operating system DC01 was using:
-
-```text
-00-15-5D-01-68-00
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-29 September 2026 around 20:04 UK time.
-
-SHOWS:
-getmac /v inside DC01
-Ethernet physical address:
-00-15-5D-01-68-00
--->
-
-<!-- PASTE FILE: image.png - DC01 guest MAC -->
-
-This did not match the dynamic MAC that Hyper-V was reporting for DC01.
-
-After shutting down DC01 and configuring its virtual network adapter to use a consistent static MAC address matching the expected guest identity, communication returned.
-
-After the change:
-
-```text
-CLIENT01 <-> DC01 connectivity restored
-DNS restored
-SMB restored
-domain authentication restored
-```
-
-This was one of the most useful unexpected troubleshooting exercises in the lab because the IPv4 configuration looked correct and the normal services were running.
-
-It forced me to investigate progressively through:
-
-```text
-IPv4
-ARP
-DNS
-TCP
-Windows services
-Hyper-V switching
-VLAN configuration
-MAC addressing
-```
-
-rather than assuming the first visible symptom was the root cause.
-
----
-
-## Support Scenario - Alex Morgan Account Lockout
-
-One of my Jira tickets reported that Alex Morgan could not sign into CLIENT01.
-
-I reproduced a real domain lockout using the account lockout policy configured earlier.
-
-Windows displayed:
-
-```text
-The referenced account is currently locked out
-and may not be logged on to.
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-30 September 2026 around 19:54 UK time.
-
-SHOWS:
-Windows login
-alex morgan
-
-"The referenced account is currently locked out and may not be logged on to."
--->
-
-<!-- PASTE FILE: image.png - Alex locked-out login -->
-
-I checked Alex's account in Active Directory Users and Computers.
-
-The Account tab confirmed:
-
-```text
-Unlock account.
-This account is currently locked out on this
-Active Directory Domain Controller.
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-30 September 2026 around 19:55 UK time.
-
-SHOWS:
-alex morgan Properties > Account
-
-"Unlock account. This account is currently locked out on this Active Directory Domain Controller."
--->
-
-<!-- PASTE FILE: image.png - Alex ADUC lockout confirmation -->
-
-I unlocked the account and verified successful login.
-
-I then documented the resolution in Jira.
-
-<!--
-FILE NAME: Screenshot 2026-09-30 192243.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Jira Resolve dialog
-
-Resolution = Done
-
-Internal note:
-Confirmed Alex Morgan's domain account was locked out in Active Directory.
-Unlocked the account and verified successful sign-in to CLIENT01.
--->
-
-<!-- PASTE FILE: Screenshot 2026-09-30 192243.png -->
-
-The ticket then showed:
-
-```text
-Status:     Completed
-Resolution: Done
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-30 September 2026 around 20:24 UK time.
-
-SHOWS:
-Enterprise IT Service Desk > All work
-
-ITSD-1
-Alex Morgan cannot sign in to CLIENT01
-
-Status = Completed
-Resolution = Done
--->
-
-<!-- PASTE FILE: image.png - completed Alex Jira ticket -->
-
-This provided a complete service-desk workflow:
-
-```text
-Ticket
-  ↓
-Reproduce fault
-  ↓
-Confirm root cause
-  ↓
-Fix in Active Directory
-  ↓
-Verify user login
-  ↓
-Document
-  ↓
-Resolve ticket
-```
-
----
-
-## Support Scenario - Sophie Brown Missing Sales Drive
-
-Another Jira scenario involved Sophie Brown reporting that her normal Sales `S:` drive was missing.
-
-### Reproducing the Fault
-
-After removing the relevant departmental membership, File Explorer no longer showed the Sales drive.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-1 October 2026 around 19:18 UK time.
-
-SHOWS:
-File Explorer > This PC
-
-Only:
-Local Disk C:
-DVD Drive D:
-
-No Network Locations
-No Sales S drive
--->
-
-<!-- PASTE FILE: image.png - Sophie Sales drive missing -->
-
-I checked the groups in Sophie's current Windows security token.
-
-Searching specifically for:
-
-```text
-GG-Sales
-```
-
-returned no result.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-1 October 2026 around 19:22 UK time.
-
-SHOWS:
-whoami /groups | findstr /i "gg-sales"
-
-No output returned.
--->
-
-<!-- PASTE FILE: image.png - GG-Sales absent from current token -->
-
-I then checked Sophie's Active Directory account directly.
-
-Her `Member Of` tab showed only:
-
-```text
-Domain Users
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-1 October 2026 around 19:24 UK time.
-
-SHOWS:
-sophie brown Properties
-Member Of
-
-Domain Users only.
-GG-Sales is absent.
--->
-
-<!-- PASTE FILE: image.png - Sophie missing GG-Sales in AD -->
-
-This identified the root cause.
-
-The drive-map GPO used Item-Level Targeting against:
-
-```text
-GG-Sales
-```
-
-so without that membership Sophie did not meet the condition required for the `S:` mapping.
-
-### Restoring the Group Membership
-
-I added:
-
-```text
-GG-Sales
-```
-
-back to Sophie's account.
-
-<!--
-FILE NAME: Screenshot 2026-10-01 192441.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-Select Groups
-GG-Sales entered.
--->
-
-<!-- PASTE FILE: Screenshot 2026-10-01 192441.png -->
-
-I then verified the updated Active Directory membership.
-
-<!--
-FILE NAME: Screenshot 2026-10-01 192449.png
-EXACT CHAT FILE NAME.
-
-SHOWS:
-sophie brown Properties > Member Of
-
-Domain Users
-GG-Sales
--->
-
-<!-- PASTE FILE: Screenshot 2026-10-01 192449.png -->
-
-However, the drive did not immediately reappear.
-
-This demonstrated an important distinction:
-
-```text
-Active Directory membership has changed
-```
-
-does not automatically mean:
-
-```text
-the user's existing Windows logon token has changed
-```
-
-`gpupdate /force` refreshes Group Policy but does not rebuild the existing user security token.
-
-I therefore completely signed Sophie out and logged her back in.
-
-After the new login, `gpresult /r` showed the departmental drive-map GPO applying to Sophie.
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-1 October 2026 around 19:32 UK time.
-
-SHOWS:
-gpresult /r
-
-USER SETTINGS:
-CN=sophie brown,OU=Sales,OU=Company...
-
-Applied Group Policy Objects:
-GPO - Department Drive Maps
--->
-
-<!-- PASTE FILE: image.png - Sophie's applied drive-map GPO -->
-
-The Sales drive then returned:
-
-```text
-Sales (\\DC01) (S:)
-```
-
-<!--
-FILE NAME: image.png
-EXACT NAME RECEIVED BY CHAT.
-
-CHAT UPLOAD:
-1 October 2026 around 19:37 UK time.
-
-SHOWS:
-File Explorer > This PC
-
-Network Locations:
-Sales (\\DC01) (S:)
--->
-
-<!-- PASTE FILE: image.png - Sophie Sales S drive restored -->
-
-The full troubleshooting path was:
-
-```text
-Sales drive missing
-        ↓
-Check current Windows groups
-        ↓
-GG-Sales missing
-        ↓
-Check Active Directory
-        ↓
-Confirm missing membership
-        ↓
-Add GG-Sales
-        ↓
-Sign out / sign in
-        ↓
-New security token
-        ↓
-GPO item-level targeting matches
-        ↓
-Sales S drive restored
-```
-
----
-
-## What I Practised
-
-- Hyper-V
-- Windows Server 2025
-- Windows 11 domain administration
-- Active Directory Domain Services
-- Organisational Units
-- user administration
-- security groups
-- SMB file sharing
-- share permissions
-- NTFS permissions
-- authorised and unauthorised access testing
-- DNS
-- DHCP
-- DHCP scope configuration
-- Group Policy
-- Group Policy Preferences
-- Item-Level Targeting
-- mapped network drives
-- user restrictions
-- account lockout policies
-- PowerShell fundamentals
-- `Get-ADUser`
-- `Get-ADGroup`
-- `Get-ADGroupMember`
-- new-starter administration
-- Group Policy Result / RSOP
-- Wireshark
-- ICMP
-- ARP
-- DNS packet analysis
-- TCP three-way handshake
-- SMB2
-- DHCP DORA
-- Hyper-V virtual switching
-- virtual NIC troubleshooting
-- MAC-address troubleshooting
-- Jira Service Management
-- first-line support workflow
-- incident investigation
-- root-cause analysis
-- ticket documentation
-
----
-
-## Progress
-
-- [x] Hyper-V internal lab network
-- [x] NAT gateway
-- [x] Windows Server 2025
-- [x] DC01 static networking
-- [x] Active Directory Domain Services
-- [x] DNS
-- [x] `corp.example.com` domain
-- [x] Organisational Units
-- [x] test users
-- [x] departmental security groups
-- [x] Windows 11 CLIENT01
-- [x] CLIENT01 domain join
-- [x] departmental SMB shares
-- [x] share permissions
-- [x] NTFS permissions
-- [x] authorised / unauthorised access testing
-- [x] SMB / TCP 445 troubleshooting
-- [x] Group Policy
-- [x] Group Policy Preferences
-- [x] Item-Level Targeting
-- [x] mapped departmental drives
-- [x] HR user restriction GPO
-- [x] domain account lockout policy
-- [x] DHCP
-- [x] DHCP client lease testing
-- [x] DNS fault troubleshooting
-- [x] PowerShell Active Directory queries
-- [x] new-starter workflow
-- [x] Wireshark packet analysis
-- [x] ICMP capture
-- [x] ARP capture
-- [x] DNS capture
-- [x] TCP handshake capture
-- [x] SMB2 capture
-- [x] DHCP DORA capture
-- [x] Jira Service Management workflow
-- [x] Alex account-lockout ticket
-- [x] Sophie missing-drive ticket
-- [x] Hyper-V network fault investigation
-- [ ] Sam Wilson DNS Jira scenario
-- [ ] final Mia/new-starter Jira documentation
-- [ ] final README cleanup
-
----
-
-## Next Steps
-
-Before marking this Windows homelab as **v1.0 complete**, I plan to:
-
-- complete the selected Sam Wilson DNS support ticket
-- finish the final Jira documentation for the Mia Turner new-starter scenario
-- replace the remaining image placeholders in this README with the actual GitHub-uploaded image links
-- carry out one final README cleanup
-
-After v1.0, my main lab focus will move back to **CCNA networking and Cisco Packet Tracer**.
+This project demonstrates a complete build, test, troubleshoot and document cycle using a small Windows enterprise environment. My future study focus is **CCNA networking and Cisco Packet Tracer**.
