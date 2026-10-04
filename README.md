@@ -3,7 +3,20 @@
 I built this lab in Hyper-V to get practical experience with Windows Server, Active Directory, DNS, domain-joined clients, file sharing and troubleshooting.
 
 Rather than just installing Windows Server, I wanted to build something closer to a small company environment with IT, Finance, HR and Sales departments and then test it from a normal Windows client.
+## At a Glance
 
+**Completed:** October 2026 · **Focus:** Windows enterprise IT support and networking fundamentals
+
+| Area | What I worked with |
+|---|---|
+| Infrastructure | Hyper-V, Windows Server 2025, Windows 11 and the `corp.example.com` Active Directory domain |
+| Administration | OUs, users, security groups, PowerShell, Group Policy, mapped drives and new-starter onboarding |
+| Core services | DNS, DHCP, SMB file shares and Share/NTFS permissions |
+| Networking | Wireshark analysis of ICMP, ARP, DNS, TCP, SMB2 and DHCP DORA |
+| Troubleshooting | DNS misconfiguration, account lockout, missing group membership and an unexpected Hyper-V virtual NIC/MAC issue |
+| Service desk | Four Jira scenarios taken through investigation, fix, verification and resolution |
+
+The sections below contain the configuration, testing and troubleshooting evidence from the completed lab.
 ---
 
 ## Lab Environment
