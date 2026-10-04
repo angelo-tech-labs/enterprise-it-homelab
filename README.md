@@ -16,7 +16,7 @@ Rather than just installing Windows Server, I wanted to build something closer t
 | Troubleshooting | DNS misconfiguration, account lockout, missing group membership and an unexpected Hyper-V virtual NIC/MAC issue |
 | Service desk | Four Jira scenarios taken through investigation, fix, verification and resolution |
 
-The sections below contain the configuration, testing and troubleshooting evidence from the completed lab.
+<sub>The sections below contain the configuration, testing and troubleshooting evidence from the completed lab.</sub>
 ---
 
 ## Lab Environment
